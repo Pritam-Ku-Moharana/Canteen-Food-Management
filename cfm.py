@@ -33,11 +33,11 @@ def login_page():
             st.session_state.logged_in = True
             
             if student_id == "admin":   # admin user
-                st.session_state.role = "admin"
-                goto("admin")
+                st.session_state.page = "admin"
+                admin_page()
             else:
-                st.session_state.role = "user"
-                goto("user")
+                st.session_state.page = "user"
+                user_page()
 
         else:
             st.error("Invalid ID or Password ❌")
@@ -68,6 +68,7 @@ elif st.session_state.page == "admin":
 
 elif st.session_state.page == "user":
     user_page()
+
 
 
 
