@@ -6,6 +6,11 @@ import io
 import matplotlib.pyplot as plt
 from PIL import Image
 
+
+def now_ist():
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+
+
 # ---------------- page config ----------------
 st.set_page_config(page_title="Hostel Meal Booking")
 
@@ -209,7 +214,7 @@ def user_page():
 
     # --- ADDED 2 lines for debugging current time ---
     now = datetime.now().time()
-    st.info(f"Current system time = {now.strftime('%H:%M:%S')}")
+    st.info("Current IST time: " + now_ist().time().strftime("%H:%M:%S"))
 
     import time as pytime
     st.caption(f"Timezone = {pytime.tzname}")
@@ -296,6 +301,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
