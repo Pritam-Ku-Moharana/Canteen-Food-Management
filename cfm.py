@@ -10,8 +10,8 @@ if "page" not in st.session_state:
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if "role" not in st.session_state:
-    st.session_state.role = None
+    
+
 
 
 
@@ -34,10 +34,10 @@ def login_page():
             
             if student_id == "admin":   # admin user
                 st.session_state.page = "admin"
-                admin_page()
+         
             else:
                 st.session_state.page = "user"
-                user_page()
+               
 
         else:
             st.error("Invalid ID or Password ❌")
@@ -68,6 +68,7 @@ elif st.session_state.page == "admin":
 
 elif st.session_state.page == "user":
     user_page()
+
 
 
 
