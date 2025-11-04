@@ -13,9 +13,8 @@ if "logged_in" not in st.session_state:
 if "role" not in st.session_state:
     st.session_state.role = None
 
-def goto(page):
-    st.session_state.page = page
-    st.experimental_rerun()
+
+
 
 # ------------- load users ------------- #
 users_df = pd.read_excel("users.xlsx")        # A/users.xlsx
@@ -49,15 +48,15 @@ def admin_page():
     st.write("Welcome Admin")
 
     if st.button("Logout"):
-        goto("login")
+        login_page()
 
 
 def user_page():
     st.title("Meal Booking Page")
-    st.write("Welcome User")
+    st.write("Welcome User",student_id)
 
     if st.button("Logout"):
-        goto("login")
+        login_page()
 
 
 # -------- ROUTING -------- #
@@ -69,4 +68,5 @@ elif st.session_state.page == "admin":
 
 elif st.session_state.page == "user":
     user_page()
+
 
