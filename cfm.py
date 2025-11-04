@@ -33,11 +33,34 @@ if st.button("Login"):
         st.error("Invalid ID or Password ❌")
 
 
-# redirect if logged in
-if st.session_state.logged_in:
-    if st.session_state.role == "admin":
-        st.page_link("pages/admin_page.py", label="Go to Admin Dashboard →")
-    else:
-        st.page_link("pages/user_page.py", label="Go to Booking Page →")
+
+def admin_page():
+    st.title("Admin Dashboard")
+    st.write("Welcome Admin")
+
+    # go back btn
+    if st.button("Logout"):
+        goto("login")
+
+
+def user_page():
+    st.title("Meal Booking Page")
+    st.write("Welcome User")
+
+    if st.button("Logout"):
+        goto("login")
+
+
+# ---------------- ROUTING ---------------- #
+
+if st.session_state.page == "login":
+    login_page()
+
+elif st.session_state.page == "admin":
+    admin_page()
+
+elif st.session_state.page == "user":
+    user_page()
+
 
 
