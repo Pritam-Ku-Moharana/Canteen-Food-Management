@@ -76,14 +76,16 @@ def in_time_window(window_start: time, window_end: time, now_time: time):
     return (now_time >= window_start) and (now_time <= window_end)
 
 def can_book(meal):
-    now = datetime.now().time()
+    now = now_ist().time()
     w = TIME_WINDOWS[meal]
     return in_time_window(w["book_start"], w["book_end"], now)
 
+
 def can_cancel(meal):
-    now = datetime.now().time()
+    now = now_ist().time()
     w = TIME_WINDOWS[meal]
     return in_time_window(w["cancel_start"], w["cancel_end"], now)
+
 
 def user_has_active_booking(date_str, student_id, meal):
     df = load_bookings()
@@ -294,6 +296,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
