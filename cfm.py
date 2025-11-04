@@ -20,7 +20,7 @@ MEALS = ["breakfast", "lunch", "dinner"]
 # Time windows (all bookings are for TOMORROW)
 TIME_WINDOWS = {
     "breakfast": {
-        "book_start": time(19, 0),   # 19:00 prev day
+        "book_start": time(10, 0),   # 19:00 prev day
         "book_end":   time(21, 0),   # 21:00 prev day
         "cancel_start": time(21, 0), # 21:00 prev day
         "cancel_end":   time(22, 0), # 22:00 prev day
@@ -285,4 +285,5 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
