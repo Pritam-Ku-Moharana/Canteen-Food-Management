@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 # ---------------- page config ----------------
-st.set_page_config(page_title="Hostel Meal Booking", layout="wide")
+st.set_page_config(page_title="Hostel Meal Booking")
 
 # ---------------- constants ----------------
 DATA_DIR = "data"
@@ -285,3 +285,4 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
