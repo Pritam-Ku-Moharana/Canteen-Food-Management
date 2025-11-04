@@ -6,6 +6,8 @@ import io
 import matplotlib.pyplot as plt
 from PIL import Image
 import time as pytime  # for sleep in clock
+from streamlit_autorefresh import st_autorefresh
+
 
 # ----------------- helper: IST now -----------------
 def now_ist():
@@ -206,92 +208,96 @@ def admin_page():
 
 # ---------------- Live Clock helper ----------------
 def show_clock():
-    """Displays a live IST clock. Use st.session_state.clock_running to control."""
-    placeholder = st.empty()
-    # control buttons
-    col_a, col_b = st.columns([1,1])
-    with col_a:
-        if st.button("Stop Clock", key="stop_clock"):
+    if "clock_running" not in st.session_state:
+        st.session_state.clock_running = True
+
+    ph = st.empty()
+
+    col1,col2 = st.columns(2)
+    with col1:
+        if st.button("Stop Clock"):
             st.session_state.clock_running = False
-    with col_b:
-        if st.button("Start Clock", key="start_clock"):
+    with col2:
+        if st.button("Start Clock"):
             st.session_state.clock_running = True
             st.rerun()
 
-    # show always current IST time
-    now = now_ist()
-    placeholder.markdown(f"**IST Time:** `{now.strftime('%Y-%m-%d %H:%M:%S')}`")
+    # display current IST
+    ph.markdown(f"### IST Time: `{now_ist().strftime('%H:%M:%S')}`")
 
-    # if running, schedule a rerun after 1 second
+    # auto refresh
     if st.session_state.clock_running:
-        pytime.sleep(1)
-        st.rerun()
+        st_autorefresh(interval=1000, key="clock_refresh")
+
 
 # ---------------- UI: User ----------------
 def user_page():
     st.title("Meal Booking Page")
-    # show live clock for user as well
-    show_clock()
 
     uid = st.session_state.student_id
     user_row = users_df[users_df["student_id"] == uid]
     name = user_row.iloc[0]["name"] if not user_row.empty else ""
 
-    st.write(f"Welcome, **{name}** ({uid})")
-    st.write(f"Booking is always for **{get_tomorrow_date().isoformat()}**")
+    # SHOW current IST once when page loads
+    st.info("Current IST time : " + now_ist().strftime("%H:%M:%S"))
 
-    # show menu image for tomorrow if present
-    menu_img = get_menu_image_path(get_tomorrow_date().isoformat())
+    st.write(f"Welcome, **{name}** ({uid})")
+    tomorrow = get_tomorrow_date().isoformat()
+    st.write(f"Booking is always for **{tomorrow}**")
+
+    menu_img = get_menu_image_path(tomorrow)
     if menu_img:
-        st.image(menu_img, caption=f"Menu for {get_tomorrow_date().isoformat()}", use_column_width=True)
+        st.image(menu_img, caption=f"Menu for {tomorrow}", use_column_width=True)
 
     st.markdown("---")
-    st.subheader("Book / Cancel (buttons appear only in allowed windows)")
+    st.subheader("Book / Cancel")
 
     for meal in MEALS:
         st.markdown(f"### {meal.capitalize()}")
-        bs = can_book(meal)
-        cs = can_cancel(meal)
+        canB = can_book(meal)
+        canC = can_cancel(meal)
+        booked, last = user_has_active_booking(tomorrow, uid, meal)
 
-        booked, last_status = user_has_active_booking(get_tomorrow_date().isoformat(), uid, meal)
+        c1,c2,c3 = st.columns([1,1,1])
 
-        cols = st.columns([1,1,1])
-        with cols[0]:
-            if bs:
+        with c1:
+            if canB:
                 if not booked:
-                    if st.button(f"Book {meal.capitalize()}", key=f"book_{meal}_{uid}"):
-                        append_booking_row(get_tomorrow_date().isoformat(), uid, name, meal, "booked")
-                        st.success(f"{meal.capitalize()} booked for {get_tomorrow_date().isoformat()}")
+                    if st.button(f"Book {meal}", key=f"book_{meal}"):
+                        append_booking_row(tomorrow, uid, name, meal, "booked")
+                        st.success(f"{meal} booked")
                         st.rerun()
                 else:
-                    st.info(f"Already booked ({last_status})")
+                    st.info("Already booked")
             else:
-                st.write("Booking not open")
+                st.write("Booking closed")
 
-        with cols[1]:
-            if cs:
+        with c2:
+            if canC:
                 if booked:
-                    if st.button(f"Cancel {meal.capitalize()}", key=f"cancel_{meal}_{uid}"):
-                        append_booking_row(get_tomorrow_date().isoformat(), uid, name, meal, "cancelled")
-                        st.success(f"{meal.capitalize()} cancelled for {get_tomorrow_date().isoformat()}")
+                    if st.button(f"Cancel {meal}", key=f"cancel_{meal}"):
+                        append_booking_row(tomorrow, uid, name, meal, "cancelled")
+                        st.success(f"{meal} cancelled")
                         st.rerun()
                 else:
-                    st.write("No active booking to cancel")
+                    st.write("No booking")
             else:
-                st.write("Cancel not open")
+                st.write("Cancel closed")
 
-        with cols[2]:
-            if last_status:
-                st.write(f"Last status: **{last_status}**")
+        with c3:
+            if last:
+                st.write(f"Last: **{last}**")
             else:
                 st.write("No record yet")
+
         st.markdown("---")
 
     if st.button("Logout"):
         st.session_state.logged_in = False
         st.session_state.student_id = ""
         st.session_state.role = None
-        goto("login")
+        st.rerun()
+
 
 # ---------------- routing ----------------
 if st.session_state.page == "login":
@@ -310,4 +316,5 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
