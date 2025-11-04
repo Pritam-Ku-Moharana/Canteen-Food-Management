@@ -5,30 +5,31 @@ from datetime import datetime, time, timedelta
 import io
 import matplotlib.pyplot as plt
 from PIL import Image
+import time as pytime  # for sleep in clock
 
-
+# ----------------- helper: IST now -----------------
 def now_ist():
+    """Return current datetime in IST (UTC+5:30)."""
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
-
 # ---------------- page config ----------------
-st.set_page_config(page_title="Hostel Meal Booking")
+st.set_page_config(page_title="Hostel Meal Booking", layout="wide")
 
 # ---------------- constants ----------------
-DATA_DIR = "data"
+DATA_DIR = "."
 USERS_FILE = os.path.join(DATA_DIR, "users.xlsx")
 BOOKING_FILE = os.path.join(DATA_DIR, "daily_meal_booking.xlsx")
 MENU_IMG_DIR = os.path.join(DATA_DIR, "menu_images")
 
 MEALS = ["breakfast", "lunch", "dinner"]
 
-# Time windows (all bookings are for TOMORROW)
+# TIME WINDOWS (IST). Booking is for TOMORROW.
 TIME_WINDOWS = {
     "breakfast": {
-        "book_start":   time(10, 0),
-        "book_end":     time(11, 0),
-        "cancel_start": time(10, 30),
-        "cancel_end":   time(11, 30),
+        "book_start":   time(10, 0),   # 10:00 IST
+        "book_end":     time(11, 0),   # 11:00 IST
+        "cancel_start": time(10, 30),  # 10:30 IST
+        "cancel_end":   time(11, 30),  # 11:30 IST
     },
     "lunch": {
         "book_start": time(7, 0),
@@ -45,20 +46,19 @@ TIME_WINDOWS = {
 }
 
 # ---------------- helpers ----------------
-def ensure_data_dirs():
-    os.makedirs(DATA_DIR, exist_ok=True)
+def ensure_files_exist():
     os.makedirs(MENU_IMG_DIR, exist_ok=True)
-    # create booking file if missing
+    # booking file
     if not os.path.exists(BOOKING_FILE):
         df = pd.DataFrame(columns=["date", "student_id", "name", "meal", "status", "timestamp"])
         df.to_excel(BOOKING_FILE, index=False)
-    # users file must exist (you created it earlier). If not, create sample small file.
+    # users file (create sample if missing)
     if not os.path.exists(USERS_FILE):
-        sample = []
-        for i in range(1, 11):
-            sample.append({"student_id": f"H{i:03}", "name": f"Student {i}", "password": f"P{i:03}"})
-        sample.append({"student_id": "ADMIN", "name": "Admin", "password": "admin123"})
-        pd.DataFrame(sample).to_excel(USERS_FILE, index=False)
+        rows = []
+        for i in range(1, 101):
+            rows.append({"student_id": f"H{i:03}", "name": f"Student {i}", "password": f"P{i:03}"})
+        rows.append({"student_id": "ADMIN", "name": "Admin", "password": "admin123"})
+        pd.DataFrame(rows).to_excel(USERS_FILE, index=False)
 
 def load_users():
     return pd.read_excel(USERS_FILE, dtype=str)
@@ -67,17 +67,16 @@ def load_bookings():
     return pd.read_excel(BOOKING_FILE, dtype=str)
 
 def append_booking_row(date_str, student_id, name, meal, status):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     row = {"date": date_str, "student_id": student_id, "name": name, "meal": meal, "status": status, "timestamp": timestamp}
     df = load_bookings()
     df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
     df.to_excel(BOOKING_FILE, index=False)
 
 def get_tomorrow_date():
-    return (datetime.now() + timedelta(days=1)).date()
+    return (now_ist() + timedelta(days=1)).date()
 
 def in_time_window(window_start: time, window_end: time, now_time: time):
-    # simple inclusive check (window in same day)
     return (now_time >= window_start) and (now_time <= window_end)
 
 def can_book(meal):
@@ -85,21 +84,18 @@ def can_book(meal):
     w = TIME_WINDOWS[meal]
     return in_time_window(w["book_start"], w["book_end"], now)
 
-
 def can_cancel(meal):
     now = now_ist().time()
     w = TIME_WINDOWS[meal]
     return in_time_window(w["cancel_start"], w["cancel_end"], now)
 
-
 def user_has_active_booking(date_str, student_id, meal):
     df = load_bookings()
-    # find last status for that meal for that date & user (consider last row)
     sel = df[(df["date"] == date_str) & (df["student_id"] == student_id) & (df["meal"] == meal)]
     if sel.empty:
-        return False, None  # not booked
+        return False, None
     last_status = sel.iloc[-1]["status"]
-    return (last_status.lower() == "booked"), last_status
+    return (str(last_status).lower() == "booked"), last_status
 
 def save_menu_image(uploaded_file, date_str):
     filename = os.path.join(MENU_IMG_DIR, f"menu_{date_str}.png")
@@ -112,7 +108,7 @@ def get_menu_image_path(date_str):
     return p if os.path.exists(p) else None
 
 # ---------------- initialization ----------------
-ensure_data_dirs()
+ensure_files_exist()
 users_df = load_users()
 
 # ---------------- session state / routing ----------------
@@ -124,25 +120,25 @@ if "student_id" not in st.session_state:
     st.session_state.student_id = ""
 if "role" not in st.session_state:
     st.session_state.role = None
+if "clock_running" not in st.session_state:
+    st.session_state.clock_running = True
 
 def goto(page):
     st.session_state.page = page
     st.rerun()
 
-# ---------------- UI: login ----------------
+# ---------------- UI: Login ----------------
 def login_page():
     st.title("Hostel Meal Booking - Login")
-
     col1, col2 = st.columns([2,1])
     with col1:
         student_id = st.text_input("Student ID")
         password = st.text_input("Password", type="password")
     with col2:
-        st.write("")  # spacing
-        login_btn = st.button("Login", key="login_btn")
+        st.write("")
+        login_btn = st.button("Login")
 
     if login_btn:
-        # match in users
         match = users_df[(users_df["student_id"] == str(student_id)) & (users_df["password"] == str(password))]
         if not match.empty:
             st.session_state.logged_in = True
@@ -156,35 +152,37 @@ def login_page():
         else:
             st.error("Invalid ID or Password ❌")
 
-    st.info("For demo: use student IDs from data/users.xlsx. Admin: ADMIN / admin123")
+    st.info("Demo users created if missing. Admin: ADMIN / admin123")
 
-# ---------------- UI: admin ----------------
+# ---------------- UI: Admin ----------------
 def admin_page():
     st.title("Admin Dashboard")
+    # SHOW LIVE IST CLOCK on admin too
+    clock_col = st.columns([1,3])[0]
+    with clock_col:
+        show_clock()
+
     st.write("Welcome Admin")
 
-    # upload menu photo for tomorrow
-    st.subheader("Upload Today's Menu Photo (for Tomorrow's meals)")
+    # Upload menu image for TOMORROW
     tomorrow = get_tomorrow_date().isoformat()
-    uploaded = st.file_uploader("Upload menu image (png/jpg)", type=["png","jpg","jpeg"], key="menu_upload")
+    st.subheader(f"Upload Menu Image for {tomorrow}")
+    uploaded = st.file_uploader("Menu image (png/jpg)", type=["png","jpg","jpeg"], key="menu_upload_admin")
     if uploaded:
-        saved_path = save_menu_image(uploaded, tomorrow)
-        st.success(f"Menu image saved for {tomorrow}")
-        st.image(saved_path, caption=f"Menu for {tomorrow}", use_column_width=True)
+        saved = save_menu_image(uploaded, tomorrow)
+        st.success(f"Menu saved: {saved}")
+        st.image(saved, caption=f"Menu for {tomorrow}", use_column_width=True)
 
     st.markdown("---")
     st.subheader("View / Export Bookings")
-    # date filter
-    date_sel = st.date_input("Select date to view bookings", value=get_tomorrow_date())
+    date_sel = st.date_input("Select date to view", value=get_tomorrow_date())
     date_str = date_sel.isoformat()
 
     df = load_bookings()
     df_date = df[df["date"] == date_str]
-
     st.write(f"Total records for {date_str}: {len(df_date)}")
     st.dataframe(df_date)
 
-    # pie chart by meal & status (booked count)
     if not df_date.empty:
         counts = df_date[df_date["status"].str.lower() == "booked"].groupby("meal").size()
         fig, ax = plt.subplots()
@@ -192,48 +190,64 @@ def admin_page():
         ax.set_ylabel("")
         st.pyplot(fig)
 
-    # export CSV / Excel of filtered data
+    # Download buttons
     csv_bytes = df_date.to_csv(index=False).encode("utf-8")
     st.download_button("Download CSV", data=csv_bytes, file_name=f"bookings_{date_str}.csv", mime="text/csv")
-    # excel
     towrite = io.BytesIO()
     df_date.to_excel(towrite, index=False, engine="openpyxl")
     st.download_button("Download Excel", data=towrite.getvalue(), file_name=f"bookings_{date_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     st.markdown("---")
-    if st.button("Logout", key="admin_logout"):
+    if st.button("Logout"):
         st.session_state.logged_in = False
         st.session_state.student_id = ""
         st.session_state.role = None
         goto("login")
 
-# ---------------- UI: user ----------------
+# ---------------- Live Clock helper ----------------
+def show_clock():
+    """Displays a live IST clock. Use st.session_state.clock_running to control."""
+    placeholder = st.empty()
+    # control buttons
+    col_a, col_b = st.columns([1,1])
+    with col_a:
+        if st.button("Stop Clock", key="stop_clock"):
+            st.session_state.clock_running = False
+    with col_b:
+        if st.button("Start Clock", key="start_clock"):
+            st.session_state.clock_running = True
+            st.rerun()
+
+    # show always current IST time
+    now = now_ist()
+    placeholder.markdown(f"**IST Time:** `{now.strftime('%Y-%m-%d %H:%M:%S')}`")
+
+    # if running, schedule a rerun after 1 second
+    if st.session_state.clock_running:
+        pytime.sleep(1)
+        st.rerun()
+
+# ---------------- UI: User ----------------
 def user_page():
     st.title("Meal Booking Page")
+    # show live clock for user as well
+    show_clock()
+
     uid = st.session_state.student_id
-
-    # --- ADDED 2 lines for debugging current time ---
-    now = datetime.now().time()
-    st.info("Current IST time: " + now_ist().time().strftime("%H:%M:%S"))
-
-    import time as pytime
-    st.caption(f"Timezone = {pytime.tzname}")
-
     user_row = users_df[users_df["student_id"] == uid]
     name = user_row.iloc[0]["name"] if not user_row.empty else ""
 
     st.write(f"Welcome, **{name}** ({uid})")
     st.write(f"Booking is always for **{get_tomorrow_date().isoformat()}**")
 
-    # show menu image for tomorrow (if exists)
+    # show menu image for tomorrow if present
     menu_img = get_menu_image_path(get_tomorrow_date().isoformat())
     if menu_img:
         st.image(menu_img, caption=f"Menu for {get_tomorrow_date().isoformat()}", use_column_width=True)
 
     st.markdown("---")
-    st.subheader("Book / Cancel options (buttons appear only in allowed time windows)")
+    st.subheader("Book / Cancel (buttons appear only in allowed windows)")
 
-    # show each meal block
     for meal in MEALS:
         st.markdown(f"### {meal.capitalize()}")
         bs = can_book(meal)
@@ -241,53 +255,48 @@ def user_page():
 
         booked, last_status = user_has_active_booking(get_tomorrow_date().isoformat(), uid, meal)
 
-        row = st.columns([1,1,1])
-        with row[0]:
+        cols = st.columns([1,1,1])
+        with cols[0]:
             if bs:
                 if not booked:
-                    if st.button(f"Book {meal.capitalize()}", key=f"book_{meal}"):
+                    if st.button(f"Book {meal.capitalize()}", key=f"book_{meal}_{uid}"):
                         append_booking_row(get_tomorrow_date().isoformat(), uid, name, meal, "booked")
                         st.success(f"{meal.capitalize()} booked for {get_tomorrow_date().isoformat()}")
-                        st.experimental_rerun()
+                        st.rerun()
                 else:
                     st.info(f"Already booked ({last_status})")
             else:
-                st.write("Booking not Open")
+                st.write("Booking not open")
 
-        with row[1]:
+        with cols[1]:
             if cs:
                 if booked:
-                    if st.button(f"Cancel {meal.capitalize()}", key=f"cancel_{meal}"):
+                    if st.button(f"Cancel {meal.capitalize()}", key=f"cancel_{meal}_{uid}"):
                         append_booking_row(get_tomorrow_date().isoformat(), uid, name, meal, "cancelled")
                         st.success(f"{meal.capitalize()} cancelled for {get_tomorrow_date().isoformat()}")
-                        st.experimental_rerun()
+                        st.rerun()
                 else:
                     st.write("No active booking to cancel")
             else:
-                st.write("Cancel not Open")
+                st.write("Cancel not open")
 
-        with row[2]:
-            # show last status
+        with cols[2]:
             if last_status:
                 st.write(f"Last status: **{last_status}**")
             else:
                 st.write("No record yet")
-
         st.markdown("---")
 
-    if st.button("Logout", key="user_logout"):
+    if st.button("Logout"):
         st.session_state.logged_in = False
         st.session_state.student_id = ""
         st.session_state.role = None
         goto("login")
 
-
-
 # ---------------- routing ----------------
 if st.session_state.page == "login":
     login_page()
 elif st.session_state.page == "admin":
-    # protect admin route
     if st.session_state.logged_in and st.session_state.role == "admin":
         admin_page()
     else:
@@ -301,9 +310,3 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
-
-
-
-
-
-
