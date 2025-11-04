@@ -29,7 +29,7 @@ def login_page():
     password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        match = users_df[(users_df["student_id"] == student_id) & (users_df["password"] == password)]
+        match = users[(users["student_id"] == student_id) & (users["password"] == password)]
         if not match.empty:
             st.session_state.logged_in = True
             
@@ -69,3 +69,4 @@ elif st.session_state.page == "admin":
 
 elif st.session_state.page == "user":
     user_page()
+
