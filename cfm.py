@@ -12,26 +12,20 @@ if "logged_in" not in st.session_state:
 
 users = pd.read_excel("users.xlsx")
 
-def login_page():
-    st.title("Hostel Meal Booking Login")
+if st.button("Login"):
+    match = users[(users["student_id"] == student_id) & (users["password"] == password)]
+    if not match.empty:
+        st.session_state.logged_in = True
+        st.session_state.student_id = student_id
 
-    student_id = st.text_input("Student ID")
-    password = st.text_input("Password", type="password")
-
-    if st.button("Login"):
-        match = users[(users["student_id"] == student_id) & (users["password"] == password)]
-        if not match.empty:
-            st.session_state.logged_in = True
-            st.session_state.student_id = student_id      # <---- IMPORTANT
-
-            if student_id == "admin":
-                st.session_state.page = "admin"
-            else:
-                st.session_state.page = "user"
-
-            st.experimental_rerun()
+        if student_id == "admin":
+            st.session_state.page = "admin"
         else:
-            st.error("Invalid ID or Password ❌")
+            st.session_state.page = "user"
+
+        st.rerun()
+    else:
+        st.error("Invalid ID or Password ❌")
 
 
 def admin_page():
@@ -40,7 +34,8 @@ def admin_page():
 
     if st.button("Logout"):
         st.session_state.page = "login"
-        st.experimental_rerun()
+        st.rerun()
+
 
 
 def user_page():
@@ -49,7 +44,8 @@ def user_page():
 
     if st.button("Logout"):
         st.session_state.page = "login"
-        st.experimental_rerun()
+        st.rerun()
+
 
 
 # -------- ROUTING -------- #
@@ -59,3 +55,4 @@ elif st.session_state.page == "admin":
     admin_page()
 elif st.session_state.page == "user":
     user_page()
+
