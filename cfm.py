@@ -12,7 +12,7 @@ def now_ist():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
 # ---------------- page config ----------------
-st.set_page_config(page_title="Hostel Meal Booking", layout="wide")
+st.set_page_config(page_title="Hostel Meal Booking")
 
 # ---------------- constants ----------------
 DATA_DIR = "."
@@ -25,10 +25,10 @@ MEALS = ["breakfast", "lunch", "dinner"]
 # TIME WINDOWS (IST). Booking is for TOMORROW.
 TIME_WINDOWS = {
     "breakfast": {
-        "book_start":   time(10, 0),
-        "book_end":     time(11, 0),
-        "cancel_start": time(10, 30),
-        "cancel_end":   time(11, 30),
+        "book_start":   time(11, 0),
+        "book_end":     time(12, 0),
+        "cancel_start": time(11, 30),
+        "cancel_end":   time(12, 30),
     },
     "lunch": {
         "book_start": time(7, 0),
@@ -329,3 +329,4 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
