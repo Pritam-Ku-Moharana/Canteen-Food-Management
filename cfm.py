@@ -4,7 +4,7 @@ import pandas as pd
 st.set_page_config(page_title="Hostel Meal Booking")
 
 # load users
-users_df = pd.read_excel("data/users.xlsx")
+users_df = pd.read_excel("users.xlsx")
 
 st.title("Hostel Meal Booking Login")
 
@@ -37,3 +37,4 @@ if st.session_state.logged_in:
         st.page_link("pages/admin_page.py", label="Go to Admin Dashboard →")
     else:
         st.page_link("pages/user_page.py", label="Go to Booking Page →")
+
