@@ -204,6 +204,14 @@ def admin_page():
 def user_page():
     st.title("Meal Booking Page")
     uid = st.session_state.student_id
+
+    # --- ADDED 2 lines for debugging current time ---
+    now = datetime.now().time()
+    st.info(f"Current system time = {now.strftime('%H:%M:%S')}")
+
+    import time as pytime
+    st.caption(f"Timezone = {pytime.tzname}")
+
     user_row = users_df[users_df["student_id"] == uid]
     name = user_row.iloc[0]["name"] if not user_row.empty else ""
 
@@ -267,6 +275,7 @@ def user_page():
         goto("login")
 
 
+
 # ---------------- routing ----------------
 if st.session_state.page == "login":
     login_page()
@@ -285,6 +294,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
