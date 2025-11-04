@@ -17,7 +17,7 @@ if "role" not in st.session_state:
 
 
 # ------------- load users ------------- #
-users_df = pd.read_excel("users.xlsx")        # A/users.xlsx
+users = pd.read_excel("users.xlsx")        # A/users.xlsx
 
 # ------------- PAGES ------------- #
 
@@ -68,5 +68,6 @@ elif st.session_state.page == "admin":
 
 elif st.session_state.page == "user":
     user_page()
+
 
 
