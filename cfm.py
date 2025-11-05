@@ -243,36 +243,30 @@ def admin_page():
 
     st.markdown("---")
     st.subheader("View / Export Bookings (select date)")
-    date_sel = st.date_input("Date", value=get_tomorrow_date())
-    # date_str = date_sel.isoformat()
+
+    # ← ← FIXED LINE (default = today)
+    date_sel = st.date_input("Date", value=datetime.today().date())
+
     date_str = date_sel.strftime("%Y-%m-%d")
 
-
     df = normalize_and_load_bookings()
+    df = df[df["date"] == date_str]
 
-    st.write("DEBUG: filter date_str =", date_str)
-    st.write("DEBUG: sample dates in file =", df["date"].unique().tolist())
-    st.write("DEBUG actual df['date'] sample:", df["date"].head(5).tolist())   # add here
-    
-    df_date = df[df["date"] == date_str]
+    st.write(f"Total rows for {date_str}: {len(df)}")
+    st.dataframe(df)
 
-
-    df_date = df[df["date"] == date_str]
-    st.write(f"Total rows for {date_str}: {len(df_date)}")
-    st.dataframe(df_date)
-
-    if not df_date.empty:
-        counts = df_date[df_date["status"].str.lower() == "booked"].groupby("meal").size()
+    if not df.empty:
+        counts = df[df["status"].str.lower() == "booked"].groupby("meal").size()
         if not counts.empty:
             fig, ax = plt.subplots()
             counts.plot.pie(autopct="%1.0f%%", ax=ax)
             ax.set_ylabel("")
             st.pyplot(fig)
 
-    csv_bytes = df_date.to_csv(index=False).encode("utf-8")
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
     st.download_button("Download CSV", data=csv_bytes, file_name=f"bookings_{date_str}.csv", mime="text/csv")
     towrite = io.BytesIO()
-    df_date.to_excel(towrite, index=False, engine="openpyxl")
+    df.to_excel(towrite, index=False, engine="openpyxl")
     st.download_button("Download Excel", data=towrite.getvalue(), file_name=f"bookings_{date_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     st.markdown("---")
@@ -281,6 +275,7 @@ def admin_page():
         st.session_state.student_id = ""
         st.session_state.role = None
         goto("login")
+
 
 # ---------------- UI: User ----------------
 def user_page():
@@ -364,6 +359,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
