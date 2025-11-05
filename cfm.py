@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 # ---------------- UI cosmetics ----------------
-st.set_page_config(page_title="Hostel Meal Booking", layout="wide")
+st.set_page_config(page_title="Hostel Meal Booking")
 
 hide_streamlit_style = """
     <style>
@@ -328,3 +328,4 @@ elif st.session_state.page == "user":
         user_page()
     else:
         goto("login")
+
