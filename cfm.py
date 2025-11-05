@@ -131,11 +131,19 @@ def load_users():
         return pd.read_excel(USERS_FILE, dtype=str).fillna("")
 
 def append_booking_row(date_str, student_id, name, meal, status):
+    date_str = str(date_str)
     ts = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     row = {"date": date_str, "student_id": student_id, "meal": meal, "status": status, "timestamp": ts}
+
     df = normalize_and_load_bookings()
+
     df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+    df = df.astype(str)
+
+    st.write("DEBUG append: df shape =", df.shape)  # <-- debug
+
     df.to_excel(BOOKING_FILE, index=False)
+
 
 def get_tomorrow_date():
     return (now_ist() + timedelta(days=1)).date()
@@ -351,6 +359,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
