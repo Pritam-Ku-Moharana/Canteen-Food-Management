@@ -213,7 +213,10 @@ def login_page():
                 goto("user")
         else:
             st.error("Invalid ID or Password ❌")
-    st.info("Enter your username and password to log in")
+    st.info(
+    "Enter your username and password to log in.\n\n"
+    "If you are a new user, contact the administrator to create your account."
+)
 
 # ---------------- UI: Admin ----------------
 def admin_page():
@@ -341,6 +344,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
