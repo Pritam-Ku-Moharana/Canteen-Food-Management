@@ -90,6 +90,8 @@ def normalize_and_load_bookings():
     # try reading with header=0 (default)
     try:
         df = pd.read_excel(BOOKING_FILE, dtype=str)
+        df["date"] = df["date"].astype(str)
+
     except Exception:
         # fallback safe empty dataframe
         return pd.DataFrame(columns=EXPECTED_BOOKING_COLS)
@@ -234,7 +236,9 @@ def admin_page():
     st.markdown("---")
     st.subheader("View / Export Bookings (select date)")
     date_sel = st.date_input("Date", value=get_tomorrow_date())
-    date_str = date_sel.isoformat()
+    # date_str = date_sel.isoformat()
+    date_str = date_sel.strftime("%Y-%m-%d")
+
 
     df = normalize_and_load_bookings()
     df_date = df[df["date"] == date_str]
@@ -344,6 +348,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
