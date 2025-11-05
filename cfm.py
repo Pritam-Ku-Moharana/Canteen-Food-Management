@@ -249,8 +249,13 @@ def admin_page():
 
 
     df = normalize_and_load_bookings()
+
     st.write("DEBUG: filter date_str =", date_str)
     st.write("DEBUG: sample dates in file =", df["date"].unique().tolist())
+    st.write("DEBUG actual df['date'] sample:", df["date"].head(5).tolist())   # add here
+    
+    df_date = df[df["date"] == date_str]
+
 
     df_date = df[df["date"] == date_str]
     st.write(f"Total rows for {date_str}: {len(df_date)}")
@@ -359,6 +364,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
