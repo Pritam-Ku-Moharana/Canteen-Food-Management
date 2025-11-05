@@ -213,7 +213,7 @@ def login_page():
                 goto("user")
         else:
             st.error("Invalid ID or Password ❌")
-    st.info("For demo: users.xlsx created if missing. Admin: ADMIN / admin123")
+    st.info("Enter your username and password to log in")
 
 # ---------------- UI: Admin ----------------
 def admin_page():
@@ -341,5 +341,6 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
