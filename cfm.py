@@ -76,49 +76,39 @@ def ensure_files_exist():
         df.to_excel(BOOKING_FILE, index=False)
 
 def normalize_and_load_bookings():
-    """
-    Load booking excel robustly.
-    If file has expected header -> return as-is.
-    If file has no header (or wrong header), treat file as headerless and assign expected columns,
-    preserving rows, then overwrite file with normalized headers for future ease.
-    """
     if not os.path.exists(BOOKING_FILE):
         df = pd.DataFrame(columns=EXPECTED_BOOKING_COLS)
         df.to_excel(BOOKING_FILE, index=False)
         return df
 
-    # try reading with header=0 (default)
     try:
         df = pd.read_excel(BOOKING_FILE, dtype=str)
         df["date"] = df["date"].astype(str)
-
-    except Exception:
-        # fallback safe empty dataframe
+    except:
         return pd.DataFrame(columns=EXPECTED_BOOKING_COLS)
+
+    st.write("RAW date samples:", df["date"].head(20).tolist())  # <--- only here
 
     # if expected columns present -> return
     if all(col in df.columns for col in EXPECTED_BOOKING_COLS):
-        # ensure dtype str and fill NaN with ""
         df = df.astype(str).fillna("")
         return df
 
-    # If not, try read as headerless and assign columns (this preserves data rows)
+    # else try headerless
     try:
         df_no_header = pd.read_excel(BOOKING_FILE, header=None, dtype=str)
-    except Exception:
+    except:
         return pd.DataFrame(columns=EXPECTED_BOOKING_COLS)
 
-    # If df_no_header has fewer columns than expected, pad with empty values
     if df_no_header.shape[1] < len(EXPECTED_BOOKING_COLS):
         for _ in range(len(EXPECTED_BOOKING_COLS) - df_no_header.shape[1]):
             df_no_header[len(df_no_header.columns)] = ""
 
     df_no_header.columns = EXPECTED_BOOKING_COLS[: df_no_header.shape[1]]
-    # If there are extra columns beyond expected, drop them
     df_no_header = df_no_header.loc[:, EXPECTED_BOOKING_COLS]
-    # Save normalized file back (preserves rows, adds header)
     df_no_header.to_excel(BOOKING_FILE, index=False)
     return df_no_header
+
 
 def load_users():
     if not os.path.exists(USERS_FILE):
@@ -359,6 +349,7 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
 
 
