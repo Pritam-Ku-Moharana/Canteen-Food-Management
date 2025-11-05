@@ -7,6 +7,18 @@ import io
 import matplotlib.pyplot as plt
 from PIL import Image
 
+
+# Hide Streamlit menu and footer
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}      /* hides hamburger menu */
+    footer {visibility: hidden;}        /* hides "Made with Streamlit" footer */
+    header {visibility: hidden;}        /* hides top header */
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+
 # ---------------- helper: IST now -----------------
 def now_ist():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
@@ -329,4 +341,5 @@ elif st.session_state.page == "user":
         st.warning("Please login")
         st.session_state.page = "login"
         st.rerun()
+
 
