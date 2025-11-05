@@ -2,13 +2,12 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime, time, timedelta
+from datetime import datetime, date, time, timedelta
 import io
 import matplotlib.pyplot as plt
 from PIL import Image
 
-
-# Hide Streamlit menu and footer
+# ---------------- UI cosmetics ----------------
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}      /* hides hamburger menu */
@@ -18,15 +17,14 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-
 # ---------------- helper: IST now -----------------
 def now_ist():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
 # ---------------- page config ----------------
-st.set_page_config(page_title="Hostel Meal Booking")
+st.set_page_config(page_title="Hostel Meal Booking", layout="wide")
 
-# ---------------- constants ----------------
+# ---------------- constants / files ----------------
 DATA_DIR = "."
 USERS_FILE = os.path.join(DATA_DIR, "users.xlsx")
 BOOKING_FILE = os.path.join(DATA_DIR, "daily_meal_booking.xlsx")
@@ -34,7 +32,7 @@ MENU_IMG_DIR = os.path.join(DATA_DIR, "menu_images")
 
 MEALS = ["breakfast", "lunch", "dinner"]
 
-# TIME WINDOWS (IST). Booking is for TOMORROW.
+# TIME WINDOWS (IST). These windows control when Book/Cancel buttons appear.
 TIME_WINDOWS = {
     "breakfast": {
         "book_start":   time(9, 0),
@@ -56,13 +54,14 @@ TIME_WINDOWS = {
     }
 }
 
-EXPECTED_BOOKING_COLS = ["date", "student_id", "meal", "status", "timestamp"]
+# FINAL expected columns (new schema)
+EXPECTED_BOOKING_COLS = ["booking_date", "meal_date", "student_id", "meal", "status", "timestamp"]
 
 # ---------------- helpers / IO ----------------
 def ensure_files_exist():
     os.makedirs(MENU_IMG_DIR, exist_ok=True)
 
-    # ensure users.xlsx exists (create sample if missing)
+    # ensure users.xlsx exists (do not overwrite if present)
     if not os.path.exists(USERS_FILE):
         rows = []
         for i in range(1, 101):
@@ -70,45 +69,90 @@ def ensure_files_exist():
         rows.append({"student_id": "ADMIN", "name": "Admin", "password": "admin123"})
         pd.DataFrame(rows).to_excel(USERS_FILE, index=False)
 
-    # ensure booking file exists; if missing create with header
+    # ensure booking file exists with new header (do not overwrite if present)
     if not os.path.exists(BOOKING_FILE):
         df = pd.DataFrame(columns=EXPECTED_BOOKING_COLS)
         df.to_excel(BOOKING_FILE, index=False)
 
 def normalize_and_load_bookings():
+    """
+    Load booking excel robustly and migrate old schema if necessary.
+
+    - Supports old file format where column name was 'date' (booking date).
+      We treat old 'date' as booking_date (per your confirmation).
+      We then create meal_date = booking_date + 1 day.
+    - Ensures both booking_date and meal_date are ISO strings YYYY-MM-DD.
+    - Returns dataframe with EXPECTED_BOOKING_COLS (strings).
+    """
     if not os.path.exists(BOOKING_FILE):
         df = pd.DataFrame(columns=EXPECTED_BOOKING_COLS)
         df.to_excel(BOOKING_FILE, index=False)
         return df
 
+    # Try reading file
     try:
         df = pd.read_excel(BOOKING_FILE, dtype=str)
-        df["date"] = df["date"].astype(str)
-    except:
+    except Exception:
+        # If reading fails, return empty normalized df
         return pd.DataFrame(columns=EXPECTED_BOOKING_COLS)
 
-    st.write("RAW date samples:", df["date"].head(20).tolist())  # <--- only here
+    # If old schema: single column "date" exists but "booking_date" does not
+    if "date" in df.columns and "booking_date" not in df.columns:
+        # treat old 'date' as booking_date
+        df = df.rename(columns={"date": "booking_date"})
+        # create meal_date as booking_date + 1 day (handle parsing)
+        df["booking_date"] = pd.to_datetime(df["booking_date"], errors="coerce")
+        # If there are any NaT, keep as NaT; next lines will coerce to string 'NaT' -> handle later
+        df["meal_date"] = (df["booking_date"] + pd.Timedelta(days=1))
+        # keep other columns if present, else create
+        if "student_id" not in df.columns:
+            df["student_id"] = ""
+        if "meal" not in df.columns:
+            df["meal"] = ""
+        if "status" not in df.columns:
+            df["status"] = ""
+        if "timestamp" not in df.columns:
+            df["timestamp"] = ""
+        # ensure order and columns
+        df = df[["booking_date", "meal_date", "student_id", "meal", "status", "timestamp"]]
 
-    # if expected columns present -> return
-    if all(col in df.columns for col in EXPECTED_BOOKING_COLS):
-        df = df.astype(str).fillna("")
-        return df
+    # If already in new-ish schema but maybe with different names, attempt to standardize
+    if "booking_date" in df.columns:
+        # Normalize booking_date and meal_date to ISO strings
+        df["booking_date"] = pd.to_datetime(df["booking_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        # If meal_date exists, normalize; if not, create meal_date = booking_date + 1
+        if "meal_date" in df.columns:
+            df["meal_date"] = pd.to_datetime(df["meal_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+            # For rows where meal_date is NaT, attempt to set from booking_date
+            mask_meal_na = df["meal_date"].isnull() | df["meal_date"].isin(["NaT", "None", "nan"])
+            if mask_meal_na.any():
+                # convert booking_date to datetime then +1
+                temp = pd.to_datetime(df.loc[mask_meal_na, "booking_date"], errors="coerce") + pd.Timedelta(days=1)
+                df.loc[mask_meal_na, "meal_date"] = temp.dt.strftime("%Y-%m-%d")
+        else:
+            # create meal_date as booking_date + 1 day
+            temp = pd.to_datetime(df["booking_date"], errors="coerce") + pd.Timedelta(days=1)
+            df["meal_date"] = temp.dt.strftime("%Y-%m-%d")
+    else:
+        # If neither 'date' nor 'booking_date' exist, try headerless load below
+        pass
 
-    # else try headerless
+    # Final enforcement: ensure all expected columns exist
+    for col in EXPECTED_BOOKING_COLS:
+        if col not in df.columns:
+            df[col] = ""
+
+    # Keep only expected columns and ensure string types
+    df = df[EXPECTED_BOOKING_COLS].astype(str).fillna("")
+
+    # Save normalized back to excel (this will upgrade old files automatically)
     try:
-        df_no_header = pd.read_excel(BOOKING_FILE, header=None, dtype=str)
-    except:
-        return pd.DataFrame(columns=EXPECTED_BOOKING_COLS)
+        df.to_excel(BOOKING_FILE, index=False)
+    except Exception:
+        # don't crash if save fails (permissions etc)
+        pass
 
-    if df_no_header.shape[1] < len(EXPECTED_BOOKING_COLS):
-        for _ in range(len(EXPECTED_BOOKING_COLS) - df_no_header.shape[1]):
-            df_no_header[len(df_no_header.columns)] = ""
-
-    df_no_header.columns = EXPECTED_BOOKING_COLS[: df_no_header.shape[1]]
-    df_no_header = df_no_header.loc[:, EXPECTED_BOOKING_COLS]
-    df_no_header.to_excel(BOOKING_FILE, index=False)
-    return df_no_header
-
+    return df
 
 def load_users():
     if not os.path.exists(USERS_FILE):
@@ -116,27 +160,51 @@ def load_users():
     try:
         return pd.read_excel(USERS_FILE, dtype=str).fillna("")
     except Exception:
-        # if read error, create sample
         ensure_files_exist()
         return pd.read_excel(USERS_FILE, dtype=str).fillna("")
 
-def append_booking_row(date_str, student_id, name, meal, status):
-    date_str = str(date_str)
+def append_booking_row(booking_date_obj, student_id, name, meal, status):
+    """
+    booking_date_obj: a date or date-like (we will treat as booking_date, not meal_date)
+    We store:
+      - booking_date = ISO of booking_date_obj (YYYY-MM-DD)
+      - meal_date = booking_date + 1 day (ISO)
+    """
+    # make booking_date and meal_date ISO strings
+    booking_dt = pd.to_datetime(booking_date_obj).date()
+    meal_dt = booking_dt + timedelta(days=1)
+
+    booking_iso = booking_dt.strftime("%Y-%m-%d")
+    meal_iso = meal_dt.strftime("%Y-%m-%d")
     ts = now_ist().strftime("%Y-%m-%d %H:%M:%S")
-    row = {"date": date_str, "student_id": student_id, "meal": meal, "status": status, "timestamp": ts}
+
+    row = {
+        "booking_date": booking_iso,
+        "meal_date": meal_iso,
+        "student_id": str(student_id),
+        "meal": str(meal),
+        "status": str(status),
+        "timestamp": ts
+    }
 
     df = normalize_and_load_bookings()
-
     df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-    df = df.astype(str)
-
-    st.write("DEBUG append: df shape =", df.shape)  # <-- debug
-
+    # enforce proper order & types
+    df = df[EXPECTED_BOOKING_COLS].astype(str).fillna("")
+    # write back
     df.to_excel(BOOKING_FILE, index=False)
 
+def get_booking_file_dates_sample():
+    df = normalize_and_load_bookings()
+    return sorted(list(set(df["booking_date"].tolist())))
 
-def get_tomorrow_date():
-    return (now_ist() + timedelta(days=1)).date()
+# ---------------- small helpers ----------------
+def get_today_booking_date_str():
+    # booking_date (the date the student pressed booking) → use IST date
+    return now_ist().date().strftime("%Y-%m-%d")
+
+def get_tomorrow_meal_date_str():
+    return (now_ist().date() + timedelta(days=1)).strftime("%Y-%m-%d")
 
 def in_time_window(window_start: time, window_end: time, now_time: time):
     return (now_time >= window_start) and (now_time <= window_end)
@@ -151,11 +219,17 @@ def can_cancel(meal):
     w = TIME_WINDOWS[meal]
     return in_time_window(w["cancel_start"], w["cancel_end"], now)
 
-def user_has_active_booking(date_str, student_id, meal):
+def user_has_active_booking(booking_date_str, student_id, meal):
+    """
+    Check if student already has active booking for this booking_date and meal.
+    booking_date_str is ISO string YYYY-MM-DD of booking date (when they pressed Book).
+    """
     df = normalize_and_load_bookings()
     if df.empty:
         return False, None
-    sel = df[(df["date"] == str(date_str)) & (df["student_id"] == str(student_id)) & (df["meal"] == str(meal))]
+    sel = df[(df["booking_date"] == str(booking_date_str)) &
+             (df["student_id"] == str(student_id)) &
+             (df["meal"] == str(meal))]
     if sel.empty:
         return False, None
     last_status = sel.iloc[-1]["status"]
@@ -176,7 +250,7 @@ def get_menu_image_path(date_str):
 ensure_files_exist()
 users_df = load_users()
 
-# ---------------- session state / routing ----------------
+# ---------------- session state ----------------
 if "page" not in st.session_state:
     st.session_state.page = "login"
 if "logged_in" not in st.session_state:
@@ -188,7 +262,7 @@ if "role" not in st.session_state:
 
 def goto(page):
     st.session_state.page = page
-    st.rerun()
+    st.experimental_rerun()
 
 # ---------------- UI: Login ----------------
 def login_page():
@@ -214,17 +288,18 @@ def login_page():
         else:
             st.error("Invalid ID or Password ❌")
     st.info(
-    "Enter your username and password to log in.\n\n"
-    "If you are a new user, contact the administrator to create your account."
-)
+        "Enter your username and password to log in.\n\n"
+        "If you are a new user, contact the administrator to create your account."
+    )
 
 # ---------------- UI: Admin ----------------
 def admin_page():
     st.title("Admin Dashboard")
     st.write("Welcome Admin")
-    tomorrow = get_tomorrow_date().isoformat()
 
-    st.subheader(f"Upload menu photo for {tomorrow}")
+    # show menu image upload for meal_date (tomorrow by default)
+    tomorrow = (now_ist().date() + timedelta(days=1)).isoformat()
+    st.subheader(f"Upload menu photo for meal date {tomorrow}")
     uploaded = st.file_uploader("Menu image (png/jpg)", type=["png","jpg","jpeg"], key="menu_admin")
     if uploaded:
         saved = save_menu_image(uploaded, tomorrow)
@@ -232,31 +307,33 @@ def admin_page():
         st.image(saved, caption=f"Menu {tomorrow}", use_column_width=True)
 
     st.markdown("---")
-    st.subheader("View / Export Bookings (select date)")
-
-    # ← ← FIXED LINE (default = today)
-    date_sel = st.date_input("Date", value=datetime.today().date())
-
-    date_str = date_sel.strftime("%Y-%m-%d")
+    st.subheader("View / Export Bookings (filter by booking date)")
+    # Admin filters by booking_date (default = today in IST)
+    date_sel = st.date_input("Booking date", value=now_ist().date())
+    date_str = pd.to_datetime(date_sel).strftime("%Y-%m-%d")
 
     df = normalize_and_load_bookings()
-    df = df[df["date"] == date_str]
+    # ensure normalized
+    df["booking_date"] = pd.to_datetime(df["booking_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df["meal_date"] = pd.to_datetime(df["meal_date"], errors="coerce").dt.strftime("%Y-%m-%d")
 
-    st.write(f"Total rows for {date_str}: {len(df)}")
-    st.dataframe(df)
+    df_date = df[df["booking_date"] == date_str]
 
-    if not df.empty:
-        counts = df[df["status"].str.lower() == "booked"].groupby("meal").size()
+    st.write(f"Total rows for booking date {date_str}: {len(df_date)}")
+    st.dataframe(df_date)
+
+    if not df_date.empty:
+        counts = df_date[df_date["status"].str.lower() == "booked"].groupby("meal").size()
         if not counts.empty:
             fig, ax = plt.subplots()
             counts.plot.pie(autopct="%1.0f%%", ax=ax)
             ax.set_ylabel("")
             st.pyplot(fig)
 
-    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    csv_bytes = df_date.to_csv(index=False).encode("utf-8")
     st.download_button("Download CSV", data=csv_bytes, file_name=f"bookings_{date_str}.csv", mime="text/csv")
     towrite = io.BytesIO()
-    df.to_excel(towrite, index=False, engine="openpyxl")
+    df_date.to_excel(towrite, index=False, engine="openpyxl")
     st.download_button("Download Excel", data=towrite.getvalue(), file_name=f"bookings_{date_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     st.markdown("---")
@@ -265,7 +342,6 @@ def admin_page():
         st.session_state.student_id = ""
         st.session_state.role = None
         goto("login")
-
 
 # ---------------- UI: User ----------------
 def user_page():
@@ -279,12 +355,16 @@ def user_page():
     name = user_row.iloc[0]["name"] if not user_row.empty else ""
 
     st.write(f"Welcome, **{name}** ({uid})")
-    tomorrow = get_tomorrow_date().isoformat()
-    st.write(f"Booking is always for **{tomorrow}**")
 
-    menu_img = get_menu_image_path(tomorrow)
+    # booking_date = TODAY (IST), meal_date = tomorrow
+    booking_date = now_ist().date().strftime("%Y-%m-%d")
+    meal_date = (now_ist().date() + timedelta(days=1)).strftime("%Y-%m-%d")
+    st.write(f"Booking date (when you press Book): **{booking_date}**")
+    st.write(f"This booking is for meal date: **{meal_date}**")
+
+    menu_img = get_menu_image_path(meal_date)
     if menu_img:
-        st.image(menu_img, caption=f"Menu for {tomorrow}", use_column_width=True)
+        st.image(menu_img, caption=f"Menu for {meal_date}", use_column_width=True)
 
     st.markdown("---")
     st.subheader("Book / Cancel (buttons appear only in allowed windows)")
@@ -294,16 +374,16 @@ def user_page():
         bs = can_book(meal)
         cs = can_cancel(meal)
 
-        booked, last_status = user_has_active_booking(tomorrow, uid, meal)
+        booked, last_status = user_has_active_booking(booking_date, uid, meal)
 
         c1, c2, c3 = st.columns([1,1,1])
         with c1:
             if bs:
                 if not booked:
                     if st.button(f"Book {meal.capitalize()}", key=f"book_{meal}_{uid}"):
-                        append_booking_row(tomorrow, uid, name, meal, "booked")
-                        st.success(f"{meal.capitalize()} booked for {tomorrow}")
-                        st.rerun()
+                        append_booking_row(booking_date, uid, name, meal, "booked")
+                        st.success(f"{meal.capitalize()} booked (booking_date={booking_date}) for meal_date={meal_date}")
+                        st.experimental_rerun()
                 else:
                     st.info(f"Already booked ({last_status})")
             else:
@@ -312,9 +392,9 @@ def user_page():
             if cs:
                 if booked:
                     if st.button(f"Cancel {meal.capitalize()}", key=f"cancel_{meal}_{uid}"):
-                        append_booking_row(tomorrow, uid, name, meal, "cancelled")
-                        st.success(f"{meal.capitalize()} cancelled for {tomorrow}")
-                        st.rerun()
+                        append_booking_row(booking_date, uid, name, meal, "cancelled")
+                        st.success(f"{meal.capitalize()} cancelled (booking_date={booking_date}) for meal_date={meal_date}")
+                        st.experimental_rerun()
                 else:
                     st.write("No active booking")
             else:
@@ -341,22 +421,11 @@ elif st.session_state.page == "admin":
     else:
         st.warning("Please login as admin")
         st.session_state.page = "login"
-        st.rerun()
+        st.experimental_rerun()
 elif st.session_state.page == "user":
     if st.session_state.logged_in and st.session_state.role == "user":
         user_page()
     else:
         st.warning("Please login")
         st.session_state.page = "login"
-        st.rerun()
-
-
-
-
-
-
-
-
-
-
-
+        st.experimental_rerun()
