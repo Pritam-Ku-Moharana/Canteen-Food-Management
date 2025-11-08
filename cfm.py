@@ -83,28 +83,25 @@ def normalize_and_load_bookings():
     if "date" in df.columns and "booking_date" not in df.columns:
         df.rename(columns={"date": "booking_date"}, inplace=True)
 
-    # ensure required columns exist
+    # ensure required columns exist (add missing blank)
     for col in EXPECTED_BOOKING_COLS:
         if col not in df.columns:
             df[col] = ""
 
-    # compute meal_date if missing
+    # parse dates but DO NOT rewrite file
     df["booking_date"] = pd.to_datetime(df["booking_date"], errors="coerce")
     df["meal_date"] = pd.to_datetime(df["meal_date"], errors="coerce")
 
+    # compute missing meal date
     missing_meal = df["meal_date"].isna()
     df.loc[missing_meal, "meal_date"] = df.loc[missing_meal, "booking_date"] + timedelta(days=1)
 
-    # format ISO
+    # format to string
     df["booking_date"] = df["booking_date"].dt.strftime("%Y-%m-%d")
     df["meal_date"] = df["meal_date"].dt.strftime("%Y-%m-%d")
 
-    df = df[EXPECTED_BOOKING_COLS].astype(str).fillna("")
-    try:
-        df.to_excel(BOOKING_FILE, index=False)
-    except Exception:
-        pass
-    return df
+    return df[EXPECTED_BOOKING_COLS].fillna("").astype(str)
+
 
 def load_users():
     ensure_files_exist()
@@ -332,6 +329,7 @@ elif st.session_state.page == "user":
         user_page()
     else:
         goto("login")
+
 
 
 
