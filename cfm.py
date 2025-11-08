@@ -215,13 +215,13 @@ def admin_page():
         st.image(saved, caption=f"Menu {tomorrow}", use_column_width=True)
 
     st.markdown("---")
-    st.subheader("View / Export Bookings by Booking Date")
-
-    date_sel = st.date_input("Select booking date", value=now_ist().date())
+    st.subheader("View / Export Bookings by MEAL Date")
+    
+    date_sel = st.date_input("Select MEAL date", value=now_ist().date() + timedelta(days=1))
     date_str = pd.to_datetime(date_sel).strftime("%Y-%m-%d")
+    
+    df_date = df[df["meal_date"] == date_str]
 
-    df = normalize_and_load_bookings()
-    df_date = df[df["booking_date"] == date_str]
 
     st.write(f"Total rows for booking date {date_str}: {len(df_date)}")
     st.dataframe(df_date)
@@ -328,4 +328,5 @@ elif st.session_state.page == "user":
         user_page()
     else:
         goto("login")
+
 
